@@ -15,15 +15,20 @@ class InterceptorType(Enum):
 class CostType(Enum):
     FLAT = "flat"
     PER_MINUTE = "per_minute"
+    
+con = sqlite3.connect('radar.db', check_same_thread=False)
+
+# AI - setting row factory for easier access and enabling WAL for concurrent read/write
+con.row_factory = sqlite3.Row
+con.execute('PRAGMA journal_mode=WAL')
 
 def create_tables():
-    con = sqlite3.connect('radar.db')
     cur = con.cursor()
     
     cur.execute('''
         CREATE TABLE IF NOT EXISTS base (
             id        INTEGER PRIMARY KEY,
-            name      TEXT    NOT NULL,
+            name      TEXT    NOT NULL UNIQUE,
             latitude  REAL    NOT NULL,
             longitude REAL    NOT NULL,
             range_m   INTEGER NOT NULL
@@ -49,26 +54,24 @@ def create_tables():
             id                  INTEGER PRIMARY KEY,
             track_id            TEXT    NOT NULL UNIQUE,
             detection_time      INTEGER NOT NULL,
-            lat         REAL    NOT NULL,
-            lon         REAL    NOT NULL,
-            speed_ms    REAL    NOT NULL,
-            altitude_m  REAL    NOT NULL,
-            heading_deg REAL    NOT NULL,
+            latitude            REAL    NOT NULL,
+            longitude           REAL    NOT NULL,
+            speed_ms            REAL    NOT NULL,
+            altitude_m          REAL    NOT NULL,
+            heading_deg         REAL    NOT NULL,
             classification      INTEGER NOT NULL,
             to_be_intercepted   INTEGER NOT NULL DEFAULT 0
         )
     ''')
     
     con.commit()
-    con.close()
     
 def add_data():
-    con = sqlite3.connect('radar.db')
     cur = con.cursor()
 
     # Insert Riga base
     cur.execute('''
-        INSERT INTO base (name, latitude, longitude, range_m)
+        INSERT OR IGNORE INTO base (name, latitude, longitude, range_m)
         VALUES (?, ?, ?, ?)
     ''', ('Riga', 56.97475845607155, 24.1670070219384, 100000))
     
@@ -83,4 +86,17 @@ def add_data():
     ''')
     
     con.commit()
+    
+def init_db():
+    create_tables()
+    add_data()
+    
+def close_db():
     con.close()
+
+# Method for returning base information - mainly used for range
+def get_base():
+    cur = con.cursor()
+    cur.execute('SELECT * FROM base LIMIT 1')
+    return dict(cur.fetchone())
+
