@@ -62,7 +62,8 @@ def create_tables():
             altitude_m          REAL    NOT NULL,
             heading_deg         REAL    NOT NULL,
             classification      INTEGER DEFAULT 1,
-            to_be_intercepted   INTEGER NOT NULL DEFAULT 0
+            to_be_intercepted   INTEGER NOT NULL DEFAULT 0,
+            is_destroyed        INTEGER NOT NULL DEFAULT 0
         )
     ''')
     
@@ -76,7 +77,21 @@ def create_tables():
             exclusion_zone_m INTEGER NOT NULL DEFAULT 0
         )
     ''')
-    
+
+    # Intercept decision table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS intercept_decision (
+            id               INTEGER PRIMARY KEY,
+            track_id         TEXT    NOT NULL UNIQUE,
+            interceptor_type TEXT    NOT NULL,
+            intercept_lat    REAL    NOT NULL,
+            intercept_lon    REAL    NOT NULL,
+            intercept_time_s REAL    NOT NULL,
+            intercept_cost   REAL    NOT NULL,
+            assigned_at      REAL    NOT NULL
+        )
+    ''')
+
     con.commit()
     
 def add_data():
@@ -119,12 +134,18 @@ def close_db():
 def get_base():
     cur = con.cursor()
     cur.execute('SELECT * FROM base LIMIT 1')
-    return dict(cur.fetchone())
+    row = cur.fetchone()
+    return dict(row) if row else None
 
 def get_all_objects():
     cur = con.cursor()
-    cur.execute('SELECT * FROM object')
+    cur.execute('SELECT * FROM object WHERE is_destroyed = 0')
     return [dict(row) for row in cur.fetchall()]
+
+def mark_object_destroyed(track_id):
+    cur = con.cursor()
+    cur.execute('UPDATE object SET is_destroyed = 1 WHERE track_id = ?', (track_id,))
+    con.commit()
 
 def get_all_targets():
     cur = con.cursor()
@@ -141,11 +162,13 @@ def update_object_position(track_id, new_lat, new_lon):
     con.commit()
     
 def save_object(track_id, lat, lon, speed_ms, altitude_m, heading_deg, report_time):
+    from radar import classify_threat
+    classification = classify_threat(speed_ms, altitude_m)
     cur = con.cursor()
     cur.execute('''
         INSERT OR IGNORE INTO object (track_id, detection_time, latitude, longitude, speed_ms, altitude_m, heading_deg, classification)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (track_id, report_time, lat, lon, speed_ms, altitude_m, heading_deg, ThreatLevel.CAUTION.value))
+        ''', (track_id, report_time, lat, lon, speed_ms, altitude_m, heading_deg, classification))
     con.commit()
 
 def update_object_classification(track_id, classification):
@@ -154,3 +177,33 @@ def update_object_classification(track_id, classification):
         UPDATE object SET classification = ? WHERE track_id = ?
     ''', (classification, track_id))
     con.commit()
+
+def get_all_interceptors():
+    cur = con.cursor()
+    cur.execute('SELECT * FROM interceptor')
+    return [dict(row) for row in cur.fetchall()]
+
+def save_intercept_decision(track_id, interceptor_type, intercept_lat, intercept_lon, intercept_time_s, intercept_cost, assigned_at):
+    cur = con.cursor()
+    cur.execute('''
+        INSERT OR REPLACE INTO intercept_decision
+            (track_id, interceptor_type, intercept_lat, intercept_lon, intercept_time_s, intercept_cost, assigned_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (track_id, interceptor_type, intercept_lat, intercept_lon, intercept_time_s, intercept_cost, assigned_at))
+    cur.execute('UPDATE object SET to_be_intercepted = 1 WHERE track_id = ?', (track_id,))
+    con.commit()
+
+def get_all_intercepts():
+    cur = con.cursor()
+    cur.execute('''
+        SELECT d.* FROM intercept_decision d
+        JOIN object o ON o.track_id = d.track_id
+        WHERE o.is_destroyed = 0
+    ''')
+    return [dict(row) for row in cur.fetchall()]
+
+def get_intercept_by_track_id(track_id):
+    cur = con.cursor()
+    cur.execute('SELECT * FROM intercept_decision WHERE track_id = ?', (track_id,))
+    row = cur.fetchone()
+    return dict(row) if row else None
