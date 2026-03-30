@@ -26,7 +26,7 @@ def coordinate_distance_to_m(lat1, lon1, lat2, lon2): # Error will accumulate ov
     
 # Threat classification based on speed (m/s) and altitude (m)
 def classify_threat(speed, altitude):
-    if speed < 15 and altitude < 200:
+    if speed < 15 or altitude < 200:
         return ThreatLevel.NOT_THREAT
     if speed > 150:
         return ThreatLevel.THREAT
@@ -36,4 +36,10 @@ def classify_threat(speed, altitude):
 
 def is_in_range(base_lat, base_lon, ping_lat, ping_lon, radar_range_m):
     distance = coordinate_distance_to_m(base_lat, base_lon, ping_lat, ping_lon)
-    return distance <= radar_range_m # Returns True if object is in radar range
+    return distance <= radar_range_m # Returns True if object is in radar range - will pull radar range from DB
+
+def calculate_new_position(lat, lon, speed, heading):
+    heading_rad = math.radians(heading)
+    new_lat = lat + (speed * math.cos(heading_rad)) / LAT_M_PER_DEGREE
+    new_lon = lon + (speed * math.sin(heading_rad)) / LON_M_PER_DEGREE
+    return new_lat, new_lon
