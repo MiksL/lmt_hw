@@ -40,3 +40,17 @@ curl -X POST http://localhost:8000/api/radar \
 ```bash
 pytest tests/ -v
 ```
+
+### Running simulate.py tests
+
+simulate.py can accept arguments - specific threat IDs
+```bash
+# Send all threats
+python simulate.py
+
+# Send only RIX-1
+python simulate.py RIX-1
+
+# Send multiple specific threats
+python simulate.py RIX-1 HES-1
+```

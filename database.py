@@ -4,7 +4,6 @@
 # 3. object (for detected objects, threats, etc)
 
 import sqlite3
-import threading
 from enum import Enum
 
 from radar import ThreatLevel
@@ -19,15 +18,15 @@ class CostType(Enum):
     FLAT = "flat"
     PER_MINUTE = "per_minute"
 
-# Thread-local connections — each thread gets its own connection to avoid cursor corruption
-_local = threading.local()
+_con = None
 
 def get_con():
-    if not hasattr(_local, 'con'):
-        _local.con = sqlite3.connect('radar.db', check_same_thread=False)
-        _local.con.row_factory = sqlite3.Row
-        _local.con.execute('PRAGMA journal_mode=WAL')
-    return _local.con
+    global _con
+    if _con is None:
+        _con = sqlite3.connect('radar.db')
+        _con.row_factory = sqlite3.Row
+        _con.execute('PRAGMA journal_mode=WAL')
+    return _con
 
 def create_tables():
     cur = get_con().cursor()

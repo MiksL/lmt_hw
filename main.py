@@ -38,7 +38,7 @@ async def simulation_loop():
 app = FastAPI(lifespan=lifespan)
 
 @app.get("/map", response_class=HTMLResponse)
-def get_map():
+async def get_map():
     map = folium.Map(location=[56.879635, 24.603189], zoom_start=8)
 
     # Riga base coordinates, pulled from DB
@@ -195,7 +195,7 @@ def get_map():
     return html_map
 
 @app.get("/api/intercepts")
-def get_intercepts(all: int = 0):
+async def get_intercepts(all: int = 0):
     intercepts = get_all_intercepts(include_destroyed=bool(all))
     if not intercepts:
         return {"type": "FeatureCollection", "features": []}
@@ -237,7 +237,7 @@ def get_intercepts(all: int = 0):
     return {"type": "FeatureCollection", "features": features}
 
 @app.get("/api/objects")
-def get_objects():
+async def get_objects():
     objects = get_all_objects()
     features = []
     for obj in objects:
