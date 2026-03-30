@@ -6,6 +6,8 @@
 import sqlite3
 from enum import Enum
 
+from radar import ThreatLevel
+
 class InterceptorType(Enum):
     DRONE   = "drone"
     JET     = "jet"
@@ -59,7 +61,7 @@ def create_tables():
             speed_ms            REAL    NOT NULL,
             altitude_m          REAL    NOT NULL,
             heading_deg         REAL    NOT NULL,
-            classification      INTEGER NOT NULL,
+            classification      INTEGER DEFAULT 1,
             to_be_intercepted   INTEGER NOT NULL DEFAULT 0
         )
     ''')
@@ -100,3 +102,24 @@ def get_base():
     cur.execute('SELECT * FROM base LIMIT 1')
     return dict(cur.fetchone())
 
+def get_all_objects():
+    cur = con.cursor()
+    cur.execute('SELECT * FROM object')
+    return [dict(row) for row in cur.fetchall()]
+
+def update_object_position(track_id, new_lat, new_lon):
+    cur = con.cursor()
+    cur.execute('''
+        UPDATE object
+        SET latitude = ?, longitude = ?
+        WHERE track_id = ?
+    ''', (new_lat, new_lon, track_id))
+    con.commit()
+    
+def save_object(track_id, lat, lon, speed_ms, altitude_m, heading_deg, report_time):
+    cur = con.cursor()
+    cur.execute('''
+        INSERT OR IGNORE INTO object (track_id, detection_time, latitude, longitude, speed_ms, altitude_m, heading_deg, classification)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (track_id, report_time, lat, lon, speed_ms, altitude_m, heading_deg, ThreatLevel.CAUTION.value))
+    con.commit()
