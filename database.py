@@ -167,12 +167,12 @@ def update_object_position(track_id, new_lat, new_lon):
     
 def save_object(track_id, lat, lon, speed_ms, altitude_m, heading_deg, report_time):
     from radar import classify_threat
-    classification = classify_threat(speed_ms, altitude_m)
+    #classification = classify_threat(speed_ms, altitude_m)
     cur = get_con().cursor()
     cur.execute('''
-        INSERT OR IGNORE INTO object (track_id, detection_time, latitude, longitude, speed_ms, altitude_m, heading_deg, classification)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (track_id, report_time, lat, lon, speed_ms, altitude_m, heading_deg, classification))
+        INSERT OR IGNORE INTO object (track_id, detection_time, latitude, longitude, speed_ms, altitude_m, heading_deg)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (track_id, report_time, lat, lon, speed_ms, altitude_m, heading_deg))
     get_con().commit()
 
 def update_object_classification(track_id, classification):

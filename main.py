@@ -125,18 +125,7 @@ async def get_map():
         # AI - Updating threat classification color without page refresh
         update_feature=folium.JsCode("""
             (f, oldLayer) => {
-                if (!oldLayer) return; // If no layers, skip the update
-                const colors = { 0: 'grey', 1: 'yellow', 2: 'orange', 3: 'red' };
-                const color = colors[f.properties.classification] ?? 'grey';
-                oldLayer.setLatLng([f.geometry.coordinates[1], f.geometry.coordinates[0]]);
-                oldLayer.setStyle({ color: color, fillColor: color });
-                oldLayer.setPopupContent(
-                    'ID: '           + f.properties.track_id   +
-                    '<br>Speed: '    + f.properties.speed_ms   + ' m/s' +
-                    '<br>Altitude: ' + f.properties.altitude_m + ' m'   +
-                    '<br>Class: '    + f.properties.classification
-                );
-                return oldLayer;
+                return false;
             }
         """),
     ).add_to(map)
@@ -270,11 +259,13 @@ async def create_object(request: Request):
     report_time = data["report_time"]
     
     save_object(track_id, lat, lon, speed, altitude, heading, report_time)
-
-    return {
-        "detected": True,
-        "track_id": track_id,
-    }
+    
+    base = get_base()
+    in_range = is_in_range(lat, lon, base["latitude"], base["longitude"], base["range_m"])
+    
+    if not in_range:
+        return {"detected": False, "track_id": data["track_id"]} # Radar cannot detect object - outside of range
+    return {"detected": True, "track_id": data["track_id"]}
     
 def move_objects():
     objects = get_all_objects()
