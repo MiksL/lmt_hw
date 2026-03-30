@@ -4,6 +4,7 @@
 # 3. object (for detected objects, threats, etc)
 
 import sqlite3
+import threading
 from enum import Enum
 
 from radar import ThreatLevel
@@ -13,19 +14,23 @@ class InterceptorType(Enum):
     JET     = "jet"
     ROCKET  = "rocket"
     FIFTYCAL = "50cal"
-    
+
 class CostType(Enum):
     FLAT = "flat"
     PER_MINUTE = "per_minute"
-    
-con = sqlite3.connect('radar.db', check_same_thread=False)
 
-# AI - setting row factory for easier access and enabling WAL for concurrent read/write
-con.row_factory = sqlite3.Row
-con.execute('PRAGMA journal_mode=WAL')
+# Thread-local connections — each thread gets its own connection to avoid cursor corruption
+_local = threading.local()
+
+def get_con():
+    if not hasattr(_local, 'con'):
+        _local.con = sqlite3.connect('radar.db', check_same_thread=False)
+        _local.con.row_factory = sqlite3.Row
+        _local.con.execute('PRAGMA journal_mode=WAL')
+    return _local.con
 
 def create_tables():
-    cur = con.cursor()
+    cur = get_con().cursor()
     
     cur.execute('''
         CREATE TABLE IF NOT EXISTS base (
@@ -92,10 +97,10 @@ def create_tables():
         )
     ''')
 
-    con.commit()
+    get_con().commit()
     
 def add_data():
-    cur = con.cursor()
+    cur = get_con().cursor()
 
     # Insert Riga base
     cur.execute('''
@@ -121,89 +126,91 @@ def add_data():
           ('Adazu Poligons',        57.147684,          24.401109, 10000)
     ''')
     
-    con.commit()
+    get_con().commit()
     
 def init_db():
     create_tables()
     add_data()
     
 def close_db():
-    con.close()
+    get_con().close()
 
 # Method for returning base information - mainly used for range
 def get_base():
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('SELECT * FROM base LIMIT 1')
     row = cur.fetchone()
     return dict(row) if row else None
 
 def get_all_objects():
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('SELECT * FROM object WHERE is_destroyed = 0')
     return [dict(row) for row in cur.fetchall()]
 
 def mark_object_destroyed(track_id):
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('UPDATE object SET is_destroyed = 1 WHERE track_id = ?', (track_id,))
-    con.commit()
+    get_con().commit()
 
 def get_all_targets():
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('SELECT * FROM target')
     return [dict(row) for row in cur.fetchall()]
 
 def update_object_position(track_id, new_lat, new_lon):
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('''
         UPDATE object
         SET latitude = ?, longitude = ?
         WHERE track_id = ?
     ''', (new_lat, new_lon, track_id))
-    con.commit()
+    get_con().commit()
     
 def save_object(track_id, lat, lon, speed_ms, altitude_m, heading_deg, report_time):
     from radar import classify_threat
     classification = classify_threat(speed_ms, altitude_m)
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('''
         INSERT OR IGNORE INTO object (track_id, detection_time, latitude, longitude, speed_ms, altitude_m, heading_deg, classification)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (track_id, report_time, lat, lon, speed_ms, altitude_m, heading_deg, classification))
-    con.commit()
+    get_con().commit()
 
 def update_object_classification(track_id, classification):
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('''
         UPDATE object SET classification = ? WHERE track_id = ?
     ''', (classification, track_id))
-    con.commit()
+    get_con().commit()
 
 def get_all_interceptors():
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('SELECT * FROM interceptor')
     return [dict(row) for row in cur.fetchall()]
 
 def save_intercept_decision(track_id, interceptor_type, intercept_lat, intercept_lon, intercept_time_s, intercept_cost, assigned_at):
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('''
         INSERT OR REPLACE INTO intercept_decision
             (track_id, interceptor_type, intercept_lat, intercept_lon, intercept_time_s, intercept_cost, assigned_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (track_id, interceptor_type, intercept_lat, intercept_lon, intercept_time_s, intercept_cost, assigned_at))
     cur.execute('UPDATE object SET to_be_intercepted = 1 WHERE track_id = ?', (track_id,))
-    con.commit()
+    get_con().commit()
 
-def get_all_intercepts():
-    cur = con.cursor()
-    cur.execute('''
-        SELECT d.* FROM intercept_decision d
-        JOIN object o ON o.track_id = d.track_id
-        WHERE o.is_destroyed = 0
-    ''')
+def get_all_intercepts(include_destroyed=False):
+    cur = get_con().cursor()
+    if include_destroyed:
+        cur.execute('SELECT * FROM intercept_decision')
+    else:
+        cur.execute('''
+            SELECT * FROM intercept_decision
+            WHERE track_id IN (SELECT track_id FROM object WHERE is_destroyed = 0)
+        ''')
     return [dict(row) for row in cur.fetchall()]
 
 def get_intercept_by_track_id(track_id):
-    cur = con.cursor()
+    cur = get_con().cursor()
     cur.execute('SELECT * FROM intercept_decision WHERE track_id = ?', (track_id,))
     row = cur.fetchone()
     return dict(row) if row else None

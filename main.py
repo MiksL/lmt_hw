@@ -152,10 +152,10 @@ def get_map():
                 if (f.properties.feature_type === 'intercept_point') {
                     const marker = L.circleMarker(latlng, {
                         radius: 8,
-                        color: 'orange',
-                        fillColor: 'transparent',
+                        color: 'purple',
+                        fillColor: 'solid',
                         fillOpacity: 0,
-                        weight: 2,
+                        weight: 4,
                         dashArray: '4,4'
                     });
                     marker.bindPopup(
@@ -195,8 +195,8 @@ def get_map():
     return html_map
 
 @app.get("/api/intercepts")
-def get_intercepts():
-    intercepts = get_all_intercepts()
+def get_intercepts(all: int = 0):
+    intercepts = get_all_intercepts(include_destroyed=bool(all))
     if not intercepts:
         return {"type": "FeatureCollection", "features": []}
     base = get_base()
@@ -328,6 +328,7 @@ async def radar_ping():
                 i_lat = base['latitude']  + (intercept['intercept_lat'] - base['latitude'])  * i_progress
                 i_lon = base['longitude'] + (intercept['intercept_lon'] - base['longitude']) * i_progress
 
+                # AI debug
                 print(f"[DEBUG] {obj['track_id']} | "
                       f"threat=({obj['latitude']:.6f}, {obj['longitude']:.6f}) | "
                       f"interceptor=({i_lat:.6f}, {i_lon:.6f}) | "
@@ -342,7 +343,7 @@ async def radar_ping():
                     print(f"[INTERCEPT LOG] track_id={obj['track_id']}, interceptor={intercept['interceptor_type']}, intercept_time={intercept['intercept_time_s']}s, cost={intercept['intercept_cost']:.2f} EUR")
             continue
 
-        if classification >= ThreatLevel.CAUTION and not obj['to_be_intercepted']:
+        if classification >= ThreatLevel.THREAT and not obj['to_be_intercepted']:
             decision = find_cheapest_interceptor(obj, interceptors, targets, base)
             if decision:
                 save_intercept_decision(

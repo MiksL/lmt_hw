@@ -1,0 +1,7 @@
+.venv
+__pycache__
+radar.db
+radar.db-shm
+radar.db-wal
+.pytest_cache
+.git
