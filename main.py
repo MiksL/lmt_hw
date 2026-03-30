@@ -141,7 +141,7 @@ def get_map():
         """),
     ).add_to(map)
     
-    # AI - Interceptor dot + intercept point marker TODO: make it more accurate
+    # AI - Interceptor dot + intercept point marker
     Realtime(
         "/api/intercepts",
         interval=1000,
@@ -335,6 +335,7 @@ async def radar_ping():
                       f"intercept_point=({intercept['intercept_lat']:.6f}, {intercept['intercept_lon']:.6f}) | "
                       f"dist={dist:.1f}m | progress={progress:.3f}")
 
+                # AI check and debug
                 # Threat was snapped to intercept point last tick (dist ≈ 0), destroy this tick so the map shows the collision for 1 frame
                 if progress >= 1.0 and dist < 1:
                     mark_object_destroyed(obj['track_id'])

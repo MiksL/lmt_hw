@@ -56,6 +56,7 @@ threats = [
     },
 ]
 
+# AI - passing specific threat as argument
 selected = sys.argv[1:] if len(sys.argv) > 1 else [t["track_id"] for t in threats]
 
 for threat in threats:
