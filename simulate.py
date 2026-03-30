@@ -54,6 +54,25 @@ threats = [
         "longitude": 25.2,
         "report_time": 1
     },
+    # 2 non-threat examples
+    {
+        "track_id": "HES-1-NT",
+        "speed_ms": 100,
+        "altitude_m": 800,
+        "heading_deg": 195,
+        "latitude": 57.05,
+        "longitude": 24.35,
+        "report_time": 1
+    },
+    {
+        "track_id": "RIX-1-NT",
+        "speed_ms": 90,
+        "altitude_m": 3000,
+        "heading_deg": 245,
+        "latitude": 57.05,
+        "longitude": 24.6,
+        "report_time": 1
+    }
 ]
 
 # AI - passing specific threat as argument
