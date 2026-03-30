@@ -123,3 +123,10 @@ def save_object(track_id, lat, lon, speed_ms, altitude_m, heading_deg, report_ti
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (track_id, report_time, lat, lon, speed_ms, altitude_m, heading_deg, ThreatLevel.CAUTION.value))
     con.commit()
+
+def update_object_classification(track_id, classification):
+    cur = con.cursor()
+    cur.execute('''
+        UPDATE object SET classification = ? WHERE track_id = ?
+    ''', (classification, track_id))
+    con.commit()

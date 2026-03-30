@@ -5,8 +5,10 @@ import folium
 from contextlib import asynccontextmanager
 import asyncio
 
+from folium.plugins import Realtime
+
 from radar import is_in_range, classify_threat, calculate_new_position, ThreatLevel
-from database import close_db, get_base, init_db, get_all_objects, update_object_position, save_object
+from database import close_db, get_base, init_db, get_all_objects, update_object_classification, update_object_position, save_object
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,23 +70,58 @@ def get_map():
         fill=False,
         weight=2,
     ).add_to(map)
-
     
-    # Imaginary threat starting point and a given trajectory (with the target being the base)
-    threat1_coordinates = [57.81792086560779, 28.31858155558174]
-    folium.PolyLine(
-        locations=[threat1_coordinates, base_coordinates],
-        color="red",
-        weight=2,
+    # Updating object position every second on the map with Folium Realtime
+    Realtime(
+        "/api/objects",
+        interval=1000,
+        get_feature_id=folium.JsCode("(f) => f.properties.track_id"),
+        # AI - code for marker color and popup info based on object
+        point_to_layer=folium.JsCode("""
+            (f, latlng) => {
+                const colors = { 0: 'grey', 1: 'yellow', 2: 'orange', 3: 'red' };
+                const color = colors[f.properties.classification] ?? 'grey';
+                const marker = L.circleMarker(latlng, {
+                    radius: 6,
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 1
+                });
+                marker.bindPopup(
+                    'ID: '             + f.properties.track_id   +
+                    '<br>Speed: '      + f.properties.speed_ms   + ' m/s' +
+                    '<br>Altitude: '   + f.properties.altitude_m + ' m'   +
+                    '<br>Class: '      + f.properties.classification
+                );
+                return marker;
+            }
+        """),
     ).add_to(map)
-    
-    # Threat start marker
-    folium.Marker(location=threat1_coordinates, popup="Origin").add_to(map)
     
     # Returning HTML representation of the map
     html_map = map.get_root().render()
-
+    
     return html_map
+
+@app.get("/api/objects")
+def get_objects():
+    objects = get_all_objects()
+    features = []
+    for obj in objects:
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [obj["longitude"], obj["latitude"]]  # GeoJSON format - https://en.wikipedia.org/wiki/GeoJSON
+            },
+            "properties": {
+                "track_id": obj["track_id"],
+                "speed_ms": obj["speed_ms"],
+                "altitude_m": obj["altitude_m"],
+                "classification": obj["classification"]
+            }
+        })
+    return {"type": "FeatureCollection", "features": features}
 
 @app.post("/api/radar")
 async def create_object(request: Request):
@@ -99,14 +136,11 @@ async def create_object(request: Request):
     heading     = data["heading_deg"]
     report_time = data["report_time"]
     
-    # TODO: save object to the DB
     save_object(track_id, lat, lon, speed, altitude, heading, report_time)
-    
 
     return {
         "detected": True,
         "track_id": track_id,
-        #"classification": classification # Classification happens in the radar ping part
     }
     
 def move_objects():
@@ -126,8 +160,7 @@ async def radar_ping():
         if not in_range:
             continue
         classification = classify_threat(obj['speed_ms'], obj['altitude_m'])
-        # Classification test Print
         #print(f"Object {obj['track_id']} classified as {ThreatLevel(classification).name}")
-        # TODO: update classification in DB
+        update_object_classification(obj['track_id'], classification)
         if classification >= ThreatLevel.THREAT and not obj['to_be_intercepted']:
             pass #TODO - implement interception logic
