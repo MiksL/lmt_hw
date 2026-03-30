@@ -66,6 +66,17 @@ def create_tables():
         )
     ''')
     
+    # Target location table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS target (
+            id        INTEGER PRIMARY KEY,
+            name      TEXT    NOT NULL UNIQUE,
+            latitude  REAL    NOT NULL,
+            longitude REAL    NOT NULL,
+            exclusion_zone_m INTEGER NOT NULL DEFAULT 0
+        )
+    ''')
+    
     con.commit()
     
 def add_data():
@@ -87,6 +98,14 @@ def add_data():
             ('50cal',  900,  2000,     2000,   1,      'flat')
     ''')
     
+    cur.execute('''
+      INSERT OR IGNORE INTO target (name, latitude, longitude, exclusion_zone_m) VALUES
+          ('Riga Base',    56.97475845607155, 24.1670070219384, 1500),
+          ('Riga HES',     56.853332609436414, 24.27977593312278, 2000),
+          ('RIX',          56.920238123348426, 23.974672576950766, 3000),
+          ('Adazu Poligons',        57.147684,          24.401109, 10000)
+    ''')
+    
     con.commit()
     
 def init_db():
@@ -105,6 +124,11 @@ def get_base():
 def get_all_objects():
     cur = con.cursor()
     cur.execute('SELECT * FROM object')
+    return [dict(row) for row in cur.fetchall()]
+
+def get_all_targets():
+    cur = con.cursor()
+    cur.execute('SELECT * FROM target')
     return [dict(row) for row in cur.fetchall()]
 
 def update_object_position(track_id, new_lat, new_lon):
